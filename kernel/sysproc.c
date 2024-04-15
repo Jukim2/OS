@@ -6,6 +6,8 @@
 #include "spinlock.h"
 #include "proc.h"
 
+extern struct proc proc[NPROC];
+
 uint64
 sys_exit(void)
 {
@@ -90,7 +92,7 @@ sys_uptime(void)
   return xticks;
 }
 
-#ifdef SNU
+// #ifdef SNU
 /* Do not touch sys_time() */
 uint64 
 sys_time(void)
@@ -103,14 +105,27 @@ sys_time(void)
 /* Do not touch sys_time() */
 
 uint64
-sys_sched_setattr(void)
+sys_sched_setattr(int pid, int runtime, int period)
 {
   // FILL HERE
+  struct proc *this_proc;
 
+  if (runtime < 0 || period < 0 || runtime > period)
+    return (-1);
 
+  if (pid == 0)
+    this_proc = myproc();
+  else
+  {
+    for(this_proc = proc; this_proc < &proc[NPROC]; this_proc++)
+    {
+      if (this_proc->pid == pid)
+        break;
+    }
+  }
 
-
-
+  this_proc->runtime = runtime;
+  this_proc->period = period;
 
   return 0;
 }
@@ -124,4 +139,4 @@ sys_sched_yield(void)
 
   return 0;
 }
-#endif
+// #endif
