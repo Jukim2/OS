@@ -85,8 +85,10 @@ enum procstate { UNUSED, USED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 struct proc {
   struct spinlock lock;
 
+  int endtime;
   int runtime;
   int period;
+  int deadline;
 
   // p->lock must be held when using these:
   enum procstate state;        // Process state
@@ -108,3 +110,5 @@ struct proc {
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
 };
+
+extern struct proc proc[NPROC];

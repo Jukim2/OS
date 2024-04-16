@@ -15,6 +15,8 @@ struct proc *initproc;
 int nextpid = 1;
 struct spinlock pid_lock;
 
+int last_runned_pid = 0;
+
 extern void forkret(void);
 static void freeproc(struct proc *p);
 
@@ -124,6 +126,10 @@ allocproc(void)
 found:
   p->pid = allocpid();
   p->state = USED;
+  p->runtime = 0;
+  p->deadline = 0;
+  p->period = 0;
+  p->endtime = 0;
 
   // Allocate a trapframe page.
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
@@ -364,6 +370,10 @@ exit(int status)
   iput(p->cwd);
   end_op();
   p->cwd = 0;
+  p->runtime = 0;
+  p->deadline = 0;
+  p->period = 0;
+  p->endtime = 0;
 
   acquire(&wait_lock);
 
@@ -434,6 +444,39 @@ wait(uint64 addr)
   }
 }
 
+struct proc *find_rtp()
+{
+  struct proc *p;
+  struct proc *rtp = 0;
+
+  // find rtp
+  for(p = proc; p < &proc[NPROC]; p++) 
+  {
+    acquire(&p->lock);
+    if (p->runtime && p->endtime <= p->deadline - p->period
+      && ticks >= p->deadline - p->period)
+    {
+      if (rtp == 0)
+      {
+        rtp = p;
+      }
+      else if (rtp->deadline > p->deadline) // rtp 하나 찾음
+      {
+        rtp = p;
+      }
+      else if (rtp->deadline == p->deadline) // 새로 찾은 p와 비교
+      {
+        if (p->pid == last_runned_pid)
+          rtp = p;
+        else if (p->pid < rtp->pid)
+          rtp = p;
+      }
+    }
+    release(&p->lock);
+  }
+  return (rtp);
+}
+
 // Per-CPU process scheduler.
 // Each CPU calls scheduler() after setting itself up.
 // Scheduler never returns.  It loops, doing:
@@ -451,22 +494,37 @@ scheduler(void)
   for(;;){
     // Avoid deadlock by ensuring that devices can interrupt.
     intr_on();
+    struct proc *rtp = find_rtp();
 
-    for(p = proc; p < &proc[NPROC]; p++) {
-      acquire(&p->lock);
-      if(p->state == RUNNABLE) {
-        // Switch to chosen process.  It is the process's job
-        // to release its lock and then reacquire it
-        // before jumping back to us.
-        p->state = RUNNING;
-        c->proc = p;
-        swtch(&c->context, &p->context);
+    // run rtp
+    if (rtp != 0)
+    {
+      acquire(&rtp->lock);
+      c->proc = rtp;
+      last_runned_pid = rtp->pid;
+      swtch(&c->context, &rtp->context);
+      c->proc = 0;
+      release(&rtp->lock);
+    }
+    else
+    {
+      for(p = proc; p < &proc[NPROC]; p++) {
+        acquire(&p->lock);
+        if(p->state == RUNNABLE && !p->runtime) {
+          // Switch to chosen process.  It is the process's job
+          // to release its lock and then reacquire it
+          // before jumping back to us.
+          p->state = RUNNING;
+          c->proc = p;
+          last_runned_pid = p->pid;
+          swtch(&c->context, &p->context);
 
-        // Process is done running for now.
-        // It should have changed its p->state before coming back.
-        c->proc = 0;
+          // Process is done running for now.
+          // It should have changed its p->state before coming back.
+          c->proc = 0;
+        }
+        release(&p->lock);
       }
-      release(&p->lock);
     }
   }
 }

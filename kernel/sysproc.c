@@ -6,7 +6,7 @@
 #include "spinlock.h"
 #include "proc.h"
 
-extern struct proc proc[NPROC];
+// extern struct proc proc[NPROC];
 
 uint64
 sys_exit(void)
@@ -105,12 +105,17 @@ sys_time(void)
 /* Do not touch sys_time() */
 
 uint64
-sys_sched_setattr(int pid, int runtime, int period)
+sys_sched_setattr(void)
 {
   // FILL HERE
   struct proc *this_proc;
+  int pid, runtime, period;
 
-  if (runtime < 0 || period < 0 || runtime > period)
+  argint(0, &pid);
+  argint(1, &runtime);
+  argint(2, &period);
+
+  if (runtime < 1 || period < 1 || runtime > period)
     return (-1);
 
   if (pid == 0)
@@ -119,14 +124,26 @@ sys_sched_setattr(int pid, int runtime, int period)
   {
     for(this_proc = proc; this_proc < &proc[NPROC]; this_proc++)
     {
+      // acquire(&this_proc->lock);
       if (this_proc->pid == pid)
+      {
+        // release(&this_proc->lock);
         break;
+      }
+      // release(&this_proc->lock);
     }
   }
 
+  if (this_proc == &proc[NPROC])
+    return (-1);
+
+  // acquire(&this_proc->lock);
+  this_proc->deadline = ticks + period;
   this_proc->runtime = runtime;
   this_proc->period = period;
-
+  this_proc->endtime = ticks;
+  this_proc->state = RUNNABLE;
+  // release(&this_proc->lock);
   return 0;
 }
 
@@ -134,7 +151,13 @@ uint64
 sys_sched_yield(void)
 {
   // MODIFY THIS
-  
+  struct proc *this_proc = myproc();
+
+  acquire(&this_proc->lock);
+  this_proc->deadline += this_proc->period;
+  this_proc->endtime = ticks;
+  release(&this_proc->lock);
+
   yield();
 
   return 0;
