@@ -190,16 +190,22 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
       panic("uvmunmap: not mapped");
     if(PTE_FLAGS(*pte) == PTE_V)
       panic("uvmunmap: not a leaf");
-    if(do_free){
+    if(do_free)
+    {
       uint64 pa = PTE2PA(*pte);
-      int idx = find_same_hash(xxh64((void *)pa, PGSIZE));
+      int idx = find_idx_to_put(xxh64((void *)pa, PGSIZE));
 
-      if (idx == -1 || (idx != -1 && m_pages[idx].is_shared && m_pages[idx].cnt-- == 1))
+      // print_process_page(myproc());
+      if (idx != -1 && --(m_pages[idx].cnt) == 0)
       {
-        if (pa != zero_page)
-          kfree((void *)pa);
-        if (idx != -1)
-          memset(&m_pages[idx], 0, sizeof(m_page));
+        kfree((void *)pa);
+        memset(&m_pages[idx], 0, sizeof(m_page));
+        // printf("freed va : %p pa : %p\n", a, pa);
+      }
+      else if (idx == -1 && pa != zero_page)
+      {
+        kfree((void *)pa);
+        // printf("freed va : %p pa : %p\n", a, pa);
       }
     }
     *pte = 0;

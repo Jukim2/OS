@@ -34,6 +34,7 @@ trapinithart(void)
 // handle an interrupt, exception, or system call from user space.
 // called from trampoline.S
 //
+
 void
 usertrap(void)
 {
@@ -54,23 +55,25 @@ usertrap(void)
   if (r_scause() == 15)
   {
     struct proc *p = myproc();
-    uint64 va = r_stval();
+    uint64 va = PGROUNDDOWN(r_stval());
     pte_t *pte = walk(p->pagetable, va, 0);
     uint64 pa = pte2pa(pte);
-    int idx = find_same_hash(xxh64((void *)pa, PGSIZE));
+    int idx = find_same_pa(pa);
 
-    // 기본 복사
-    void *new_page = kalloc();
-    memmove(new_page, (void *)pa, PGSIZE);
-    *pte = PA2PTE(new_page) | PTE_FLAGS(*pte) | PTE_W;
-
-    // shared로 관리되고 있고, 이 trap에 걸렸다는 건 이미 shared라는 뜻
-    if (idx != -1 && m_pages[idx].cnt-- == 1 && m_pages[idx].is_shared)
+    if (pa == zero_page || idx != -1)
     {
-      kfree((void *)pa);
-      memset(&m_pages[idx], 0, sizeof(m_page));
-      // printf("~ Change proc p: %d old pa : %p -> new pa : %p\n", p->pid, pa, new_page);
+      void *new_page = kalloc();
+      memmove(new_page, (void *)pa, PGSIZE);
+      *pte = PA2PTE(new_page) | PTE_FLAGS(*pte) | PTE_W;
+
+      if (idx != -1 && --m_pages[idx].cnt == 0)
+      {
+        kfree((void *)pa);
+        memset(&m_pages[idx], 0, sizeof(m_page));
+      }
     }
+    
+    // printf("COW : Change proc p: %d old pa : %p -> new pa : %p\n", p->pid, pa, new_page);
   }
   else if(r_scause() == 8){
     // system call

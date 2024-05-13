@@ -51,14 +51,14 @@ main(int argc, char *argv[])
     P_SIGNAL(0);
 
     P_WAIT(0);
-    printf("\n@@@@@@@@@@@Write!!\n");
+    // printf("\n@@@@@@@@@@@Write!!\n");
     a[0] = 1;
     P_SIGNAL(0);
 
     P_WAIT(0);
-    printf("\n@@@@@@@@@@@Write!!\n");
+    // printf("\n@@@@@@@@@@@Write!!\n");
     a[100] = 2;
-    printf("\n@@@@@@@@@@@Write!!\n");
+    // printf("\n@@@@@@@@@@@Write!!\n");
     a[200] = 3;
     P_SIGNAL(0);
 
@@ -77,14 +77,14 @@ main(int argc, char *argv[])
       P_SIGNAL(1);
 
       P_WAIT(1);
-      printf("\n@@@@@@@@@@@Write!!\n");
+      // printf("\n@@@@@@@@@@@Write!!\n");
       a[100] = 2;
       P_SIGNAL(1);
 
       P_WAIT(1);
-      printf("\n@@@@@@@@@@@Write!!\n");
+      // printf("\n@@@@@@@@@@@Write!!\n");
       a[0] = 1;
-      printf("\n@@@@@@@@@@@Write!!\n");
+      // printf("\n@@@@@@@@@@@Write!!\n");
       a[200] = 3;
       P_SIGNAL(1);
 
@@ -103,14 +103,14 @@ main(int argc, char *argv[])
         P_SIGNAL(2);
 
         P_WAIT(2);
-        printf("\n@@@@@@@@@@@Write!!\n");
+        // printf("\n@@@@@@@@@@@Write!!\n");
         a[200] = 3;
         P_SIGNAL(2);
 
         P_WAIT(2);
-        printf("\n@@@@@@@@@@@Write!!\n");
+        // printf("\n@@@@@@@@@@@Write!!\n");
         a[0] = 1;
-        printf("\n@@@@@@@@@@@Write!!\n");
+        // printf("\n@@@@@@@@@@@Write!!\n");
         a[100] = 2;
         P_SIGNAL(2);
 

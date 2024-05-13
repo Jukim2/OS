@@ -12,7 +12,7 @@ struct proc proc[NPROC];
 
 struct proc *initproc;
 
-int nextpid = 1;
+int nextpid = 0;
 struct spinlock pid_lock;
 
 extern void forkret(void);

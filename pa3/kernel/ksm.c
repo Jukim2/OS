@@ -20,19 +20,37 @@
 #include "ksm.h"
 
 int print_mode = 0;
+int scanned_val, merged_val;
+uint64 scanned, merged;
 
 extern struct proc proc[NPROC];
 
 m_page m_pages[MAX_PAGE];
 
-int find_same_hash(uint64 hash_value)
+int find_same_pa(uint64 pa)
 {
   for (int i = 0; i < MAX_PAGE; i++)
   {
-    if (hash_value == m_pages[i].hash && m_pages[i].cnt < 16)
+    if (pa == m_pages[i].pa)
       return (i);
   }
   return (-1);
+}
+
+int find_idx_to_put(uint64 hash_value)
+{
+  int ret = -1;
+  for (int i = 0; i < MAX_PAGE; i++)
+  {
+    if (hash_value == m_pages[i].hash && m_pages[i].cnt < 16)
+    {
+      if (ret == -1)
+        ret = i;
+      else if (m_pages[ret].cnt < m_pages[i].cnt)
+        ret = i;
+    }
+  }
+  return (ret);
 }
 
 void clean_m_pages()
@@ -49,7 +67,7 @@ void put_page(pte_t *pte, uint64 pa, uint64 hash_value)
   int next_idx = 0;
   for (int idx = 0; idx < MAX_PAGE; idx++)
   {
-    if (m_pages[idx].cnt == 0 && m_pages[idx].first_pte == 0)
+    if (m_pages[idx].cnt == 0)
     {
       next_idx = idx;
       break;
@@ -62,13 +80,13 @@ void put_page(pte_t *pte, uint64 pa, uint64 hash_value)
   m_pages[next_idx].pa = pa;
   m_pages[next_idx].hash = hash_value;
   m_pages[next_idx].cnt = 1;
-  next_idx++;
 }
 
 void merge_pte(pte_t *pte, uint64 old_pa, uint64 new_pa)
 {
   kfree((void *)old_pa);
   *pte = PA2PTE(new_pa) | PTE_FLAGS_NO_W(*pte);
+  merged_val++;
   if (print_mode)
     printf("+ Merged from old pa : %p to new pa : %p\n", old_pa, new_pa);
 }
@@ -81,8 +99,8 @@ uint64 pte2pa(pte_t *pte)
     return 0;
   if((*pte & PTE_V) == 0)
     return 0;
-  if((*pte & PTE_U) == 0)
-    return 0;
+  // if((*pte & PTE_U) == 0)
+  //   return 0;
   pa = PTE2PA(*pte);
   return pa;
 }
@@ -94,7 +112,8 @@ void print_process_page(struct proc *p)
 
   for (int i = 0; i < p->sz; i+= PGSIZE)
   {
-    uint64 pa = walkaddr(ptb, i);
+    pte_t *pte = walk(ptb, i, 0);
+    uint64 pa = pte2pa(pte);
     if (pa)
       printf("va : %p pa : %p hash : %d\n", i, (void *)pa, xxh64((void *)pa, PGSIZE));
   }
@@ -118,17 +137,37 @@ void point_zero_page(pte_t *pte, uint64 old_pa)
   if (print_mode)  
     printf("- page %p point to zero_page : %p\n", old_pa, zero_page);
   kfree((void *)old_pa);
-  *pte = PA2PTE(zero_page) | PTE_V | PTE_U | PTE_R;
+  *pte = PA2PTE(zero_page) | PTE_FLAGS_NO_W(*pte);
+  merged_val++;
+}
+
+int return_args(pagetable_t ptb)
+{
+  if(copyout(ptb, scanned, (char *)&scanned_val, sizeof(int)) < 0)
+    return -1;
+    
+  if(copyout(ptb, merged, (char *)&merged_val, sizeof(int)) < 0)
+    return -1;
+    
+  return 0;
 }
 
 uint64
 sys_ksm(void)
 {
-  printf("----------------------------------KSM-----------------------------------------\n");
-  // 모든 프로세스 대상으로
-  struct proc *p;
-  int my_pid = myproc()->pid;
+  // clean_m_pages();
+  if (print_mode)
+  printf("----------------------------------KSM---------------------------------------------\n");
   
+  scanned_val = 0; 
+  merged_val = 0;
+  argaddr(0, &scanned);
+  argaddr(1, &merged);
+  
+  struct proc *p = myproc();
+  pagetable_t ptb = p->pagetable;
+  int my_pid = p->pid;
+
   for(p = proc; p < &proc[NPROC]; p++) 
   {
     if (!p->pid || p->pid == 1 || p->pid == 2 || p->pid == my_pid)
@@ -136,7 +175,8 @@ sys_ksm(void)
 
     if (print_mode)
     print_process_page(p);
-    // print_m_pages();
+    if (print_mode)
+    print_m_pages();
 
     for (int i = 0; i < p->sz; i+= PGSIZE)
     {
@@ -145,7 +185,8 @@ sys_ksm(void)
       if (!pa)
         continue;
       uint64 hash = xxh64((void *)pa, PGSIZE);
-      int idx = find_same_hash(hash);
+      int idx = find_idx_to_put(hash);
+      scanned_val++;
 
       if (hash == zero_hash)
         point_zero_page(pte, pa);
@@ -153,17 +194,18 @@ sys_ksm(void)
         put_page(pte, pa, hash);
       else if (idx != -1 && pa != m_pages[idx].pa)
       {
-        merge_pte(pte, pa, m_pages[idx].pa);
         if (++(m_pages[idx].cnt) == 2)
         {
           *(m_pages[idx].first_pte) = PA2PTE(m_pages[idx].pa) | PTE_FLAGS_NO_W(*pte); 
           m_pages[idx].is_shared = 1;
         }
+        merge_pte(pte, pa, m_pages[idx].pa);
       }
     }
   }
   clean_m_pages();
-  
+  return_args(ptb);
+  if (print_mode)
   printf("----------------------------------KSM End-----------------------------------------\n\n");
   return freemem;
 }

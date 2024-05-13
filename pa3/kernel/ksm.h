@@ -31,8 +31,9 @@ extern uint64 zero_hash;
 extern int freemem;
 extern m_page m_pages[MAX_PAGE];
 
+int find_same_pa(uint64 pa);
 
-int find_same_hash(uint64 hash_value);
+int find_idx_to_put(uint64 hash_value);
 
 void clean_m_pages();
 

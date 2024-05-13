@@ -57,8 +57,9 @@ main(int argc, char *argv[])
       exit(1);
   }
 
-  printf("pid %d: ksmd starts\n", getpid());
+  // printf("pid %d: ksmd starts\n", getpid());
   do_ksm();
+  // printf("stack : %p\n", pids);
 
   if ((pids[0] = fork()) == 0)
   {
